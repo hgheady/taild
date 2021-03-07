@@ -43,7 +43,7 @@ async function getSufficientBuffer(fileName, n) {
 async function nLinesBuffer(readable, lines) {
   return new Promise((resolve, reject) => {
     let bs = []
-    readable.on('data', (b) => bs.push(b))
+    readable.on('data', b => bs.push(b))
     readable.on('end', function() {
       let newlines = 0
       for (let i = bs.length-1; i != 0; --i) {
