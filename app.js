@@ -1,10 +1,13 @@
 import * as http from 'http'
 import { URL } from 'url'
-import { read } from './reader.js'
+import { createReadStream } from 'fs'
+import { initMetadataCache } from './cache.js'
 
 const port = process.env.PORT || 3142,
-      prefix = process.env.DIR || '.',
+      prefix = process.env.DIR || './logs',
       inputLength = 256
+
+const metadataCache = await initMetadataCache(prefix)
 
 const server = http.createServer()
 
@@ -12,26 +15,20 @@ server.on('request', async (req, res) => {
   res.setHeader('Content-Type', 'application/json');
   if (req.method !== 'GET') {
     res.statusCode = 405;
-    res.end(`{"error": "${http.STATUS_CODES[405]}"}`)
+    res.end(`{"error": "${http.STATUS_CODES[405]} - ${req.method}"}`)
   } else {
     let rURL = new URL(req.url, 'localhost://')
-    let fileName = prefix + rURL.pathname,
+    let filePath = prefix + rURL.pathname,
         numLines = Number(rURL.searchParams.get('lines')) || 1,
         pattern = rURL.searchParams.get('pattern')
-    if (fileName && fileName.length > inputLength
+    if (filePath && filePath.length > inputLength
         || pattern && pattern.length > inputLength) {
       res.statusCode = 400;
-      res.end(`{"error": "Path and pattern are each limited to 256 characters"}`)
+      res.end(`{"error": "Path and pattern are each limited to ${inputLength} characters"}`)
     }
-    let logLines = await read(fileName, numLines),
-        result = logLines ? logLines.toString().split('\n') : [],
-        // Filter syntax is open-ended in power/complexity/vulnerability;
-        // this will do for now
-        output = pattern ? result.filter(s => s.indexOf(pattern) >= 0) : result
-    res.end(JSON.stringify({
-      file: fileName,
-      result: output
-    }))
+    let nLinesStartIndex = metadataCache[filePath].lines.length - numLines - 1,
+        nLinesStartBytes = metadataCache[filePath].lines[nLinesStartIndex]
+    createReadStream(filePath, { start: nLinesStartBytes }).pipe(res)
   }
 })
 

@@ -1,6 +1,5 @@
 import { createReadStream } from 'fs'
-import { stat, open } from 'fs/promises'
-import { Transform } from 'stream'
+import { stat } from 'fs/promises'
 
 export { read }
 
