@@ -1,0 +1,10 @@
+{
+  "type": "module",
+  "watch": {
+    "test": "*.js"
+  },
+  "scripts": {
+    "test": "node app.js",
+    "watch": "npm-watch"
+  }
+}
