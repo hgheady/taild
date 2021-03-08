@@ -1,14 +1,14 @@
 import * as http from 'http'
 import { URL } from 'url'
 import { createReadStream } from 'fs'
-import { initMetadataCache } from './cache.js'
+import { initMetadata } from './metadata.js'
 import { lineT, filterT, responseT } from './transform.js'
 
 const port = process.env.PORT || 3142,
       prefix = process.env.DIR || './logs',
       inputLength = 256
 
-const metadataCache = await initMetadataCache(prefix)
+const metadata = await initMetadata(prefix)
 
 const server = http.createServer()
 
@@ -18,10 +18,10 @@ server.on('request', async (req, res) => {
     res.statusCode = 405;
     res.end(`{"error": "${http.STATUS_CODES[405]} - ${req.method}"}`)
   } else {
-    let rURL = new URL(req.url, 'localhost://')
-    let filePath = prefix + rURL.pathname,
-        numLines = Number(rURL.searchParams.get('lines')) || 1,
-        pattern = rURL.searchParams.get('pattern')
+    let r = new URL(req.url, `http://${req.headers.host}`)
+    let filePath = prefix + r.pathname,
+        numLines = Number(r.searchParams.get('lines')) || 1,
+        pattern = r.searchParams.get('pattern')
     if (filePath && filePath.length > inputLength
         || pattern && pattern.length > inputLength) {
       res.statusCode = 400;
@@ -30,8 +30,8 @@ server.on('request', async (req, res) => {
     res.setHeader('Content-Type', 'text/plain');
     res.setHeader('X-Log-File', filePath);
     res.setHeader('X-Requested-Lines', numLines);
-    let nLinesStartIndex = metadataCache[filePath].lines.length - numLines - 1,
-        nLinesStartBytes = metadataCache[filePath].lines[nLinesStartIndex]
+    let nLinesStartIndex = metadata[filePath].lines.length - numLines - 1,
+        nLinesStartBytes = metadata[filePath].lines[nLinesStartIndex]
     createReadStream(filePath, { start: nLinesStartBytes })
       .pipe(lineT())
       .pipe(filterT(pattern))
