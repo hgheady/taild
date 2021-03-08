@@ -2,6 +2,7 @@ import * as http from 'http'
 import { URL } from 'url'
 import { createReadStream } from 'fs'
 import { initMetadataCache } from './cache.js'
+import { lineT, filterT, responseT } from './transform.js'
 
 const port = process.env.PORT || 3142,
       prefix = process.env.DIR || './logs',
@@ -26,9 +27,16 @@ server.on('request', async (req, res) => {
       res.statusCode = 400;
       res.end(`{"error": "Path and pattern are each limited to ${inputLength} characters"}`)
     }
+    res.setHeader('Content-Type', 'text/plain');
+    res.setHeader('X-Log-File', filePath);
+    res.setHeader('X-Requested-Lines', numLines);
     let nLinesStartIndex = metadataCache[filePath].lines.length - numLines - 1,
         nLinesStartBytes = metadataCache[filePath].lines[nLinesStartIndex]
-    createReadStream(filePath, { start: nLinesStartBytes }).pipe(res)
+    createReadStream(filePath, { start: nLinesStartBytes })
+      .pipe(lineT())
+      .pipe(filterT(pattern))
+      .pipe(responseT())
+      .pipe(res)
   }
 })
 
