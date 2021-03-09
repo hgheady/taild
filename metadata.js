@@ -55,7 +55,7 @@ async function updateFileMetadata(map, path, stats) {
         lines = md ? md.lines : [],
         rs = createReadStream(path, { start: start }),
         is = await newlineIndices(rs, start)
-  map[path] = { size: stats.size, lines: lines.concat(is) }
+  map[path] = is ? { size: stats.size, lines: lines.concat(is) } : undefined
   return map
 }
 
@@ -70,6 +70,9 @@ async function newlineIndices(readable, offset = 0) {
     })
     readable.on('end', function() {
       resolve(nlis)
+    })
+    readable.on('error', () => {
+      resolve(null)
     })
   })
 }
