@@ -16,7 +16,7 @@ server.on('request', async (req, res) => {
   res.setHeader('Content-Type', 'application/json');
   if (req.method !== 'GET') {
     res.statusCode = 405;
-    res.end(`{"error": "${http.STATUS_CODES[405]} - ${req.method}"}`)
+    return res.end(`{"error": "${http.STATUS_CODES[405]} - ${req.method}"}`)
   } else {
     let r = new URL(req.url, `http://${req.headers.host}`)
     let filePath = prefix + r.pathname,
@@ -25,18 +25,29 @@ server.on('request', async (req, res) => {
     if (filePath && filePath.length > inputLength
         || pattern && pattern.length > inputLength) {
       res.statusCode = 400;
-      res.end(`{"error": "Path and pattern are each limited to ${inputLength} characters"}`)
+      return res.end(`{"error": "Path and pattern are each limited to ${inputLength} characters"}`)
     }
-    res.setHeader('Content-Type', 'text/plain');
-    res.setHeader('X-Log-File', filePath);
-    res.setHeader('X-Requested-Lines', numLines);
+    if (!metadata[filePath]) {
+      res.statusCode = 404;
+      return res.end(`{"error": "Path unknown"}`)
+    }
     let nLinesStartIndex = metadata[filePath].lines.length - numLines - 1,
         nLinesStartBytes = metadata[filePath].lines[nLinesStartIndex]
-    createReadStream(filePath, { start: nLinesStartBytes })
-      .pipe(lineT())
-      .pipe(filterT(pattern))
-      .pipe(responseT())
-      .pipe(res)
+    try {
+      res.setHeader('Content-Type', 'text/plain')
+      res.setHeader('X-Log-File', filePath)
+      res.setHeader('X-Requested-Lines', numLines)
+      createReadStream(filePath, { start: nLinesStartBytes })
+        .pipe(lineT())
+        .pipe(filterT(pattern))
+        .pipe(responseT())
+        .pipe(res)
+    } catch (e) {
+      console.log(e)
+      res.setHeader('Content-Type', 'application/json')
+      res.statusCode = 500;
+      return res.end(`{"error": "Unexpected error"}`)
+    }
   }
 })
 
