@@ -2,7 +2,7 @@ import * as http from 'http'
 import { URL } from 'url'
 import { initMetadata } from './metadata.js'
 import { getReader, getSufficientStream } from './reader.js'
-import { lineT, filterT, responseT, auxiliaryStream, reverseSeq } from './transform.js'
+import { lineT, filterT, responseT, streamSeq, reverseSeq } from './transform.js'
 import { port, prefix, cacheLength, inputLength } from './config.js'
 
 
@@ -39,10 +39,9 @@ server.on('request', async (req, res) => {
       cacheIndex = cached.length - numLines - 1
       source = await getReader(filePath, cached[cacheIndex])
     } else {
-      let aux = await getSufficientStream(
-        filePath, numLines - (cached.length-1), cached[0]-1),
-          prm = await getReader(filePath, cached[0])
-      source = auxiliaryStream(aux, prm)
+      let tail = await getReader(filePath, cached[0]),
+          rest = await getSufficientStream(filePath, numLines - (cached.length-1), cached[0])
+      source = streamSeq(rest, tail)
     }
     if (!source) {
       res.setHeader('Content-Type', 'application/json')

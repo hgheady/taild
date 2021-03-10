@@ -13,7 +13,7 @@ This project uses only built-in node libraries.
 
 `DIR` sets the log file directory path (relative or absolute, default `./logs`)
 
-`CACHE_SIZE` sets the number of line indexes to cache per file (~10 bytes per line per file)
+`CACHE_SIZE` sets the number of line indexes to cache per file (~10 bytes per line per file, default 1000)
 
 ### Use
 ```
