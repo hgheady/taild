@@ -2,7 +2,7 @@ import * as http from 'http'
 import { URL } from 'url'
 import { createReadStream } from 'fs'
 import { initMetadata } from './metadata.js'
-import { lineT, filterT, responseT } from './transform.js'
+import { lineT, filterT, responseT, reverseSeq } from './transform.js'
 
 const port = process.env.PORT || 3142,
       prefix = process.env.DIR || './logs',
@@ -37,11 +37,14 @@ server.on('request', async (req, res) => {
       res.setHeader('Content-Type', 'text/plain')
       res.setHeader('X-Log-File', filePath)
       res.setHeader('X-Requested-Lines', numLines)
-      createReadStream(filePath, { start: nLinesStartBytes })
-        .pipe(lineT())
-        .pipe(filterT(pattern))
-        .pipe(responseT())
-        .pipe(res)
+
+      const out = await reverseSeq(
+        createReadStream(filePath, { start: nLinesStartBytes })
+          .pipe(lineT())
+          .pipe(filterT(pattern))
+          .pipe(responseT()))
+      if (out) res.end(out)
+      else throw `reverseSeq failed: lines=${numLines} path=${filePath}`
     } catch (e) {
       console.log(e)
       res.setHeader('Content-Type', 'application/json')

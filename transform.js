@@ -1,5 +1,5 @@
 import { Transform } from 'stream'
-export { lineT, filterT, responseT }
+export { lineT, filterT, responseT, reverseSeq }
 
 
 function lineT() {
@@ -35,5 +35,21 @@ function responseT() {
       this.push(Buffer.from('\n'))
       callback()
     }
+  })
+}
+
+async function reverseSeq(readable) {
+  return new Promise((resolve, reject) => {
+    const bufs = []
+    readable.on('data', (bs) => {
+      bufs.unshift(bs)
+    })
+    readable.on('end', function() {
+      resolve(Buffer.concat(bufs))
+    })
+    readable.on('error', (e) => {
+      console.log(e)
+      resolve(null)
+    })
   })
 }
