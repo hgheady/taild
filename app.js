@@ -31,7 +31,7 @@ server.on('request', async (req, res) => {
     res.setHeader('X-Log-File', filePath)
     res.setHeader('X-Requested-Lines', numLines)
 
-    let source, cacheIndex, cachedOffset
+    let source, cacheIndex
     const cached = metadata[filePath] && metadata[filePath].lines
     if (!cached) {
       source = await getSufficientStream(filePath, numLines)
