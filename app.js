@@ -1,12 +1,12 @@
 import * as http from 'http'
 import { URL } from 'url'
-import { createReadStream } from 'fs'
 import { initMetadata } from './metadata.js'
-import { lineT, filterT, responseT, reverseSeq } from './transform.js'
+import { getReader, getSufficientStream } from './reader.js'
+import { lineT, filterT, responseT, auxiliaryStream, reverseSeq } from './transform.js'
 import { port, prefix, cacheLength, inputLength } from './config.js'
 
 
-const metadata = await initMetadata(prefix)
+const metadata = cacheLength ? await initMetadata(prefix) : {}
 
 const server = http.createServer()
 
@@ -15,44 +15,50 @@ server.on('request', async (req, res) => {
   if (req.method !== 'GET') {
     res.statusCode = 405
     return res.end(`{"error": "${http.STATUS_CODES[405]} - ${req.method}"}`)
-  } else {
-    let r = new URL(req.url, `http://${req.headers.host}`)
-    let filePath = prefix + r.pathname,
-        numLines = Number(r.searchParams.get('lines')) || 1,
-        pattern = r.searchParams.get('pattern')
-    if (numLines >= cacheLength) {
-      res.statusCode = 400
-      return res.end(`{"error": "Lines must be less than or equal to ${cacheLength-1}"}`)
-    }
-    if (filePath && filePath.length > inputLength
-        || pattern && pattern.length > inputLength) {
-      res.statusCode = 400
-      return res.end(`{"error": "Path and pattern are each limited to ${inputLength} characters"}`)
-    }
-    if (!metadata[filePath]) {
-      res.statusCode = 404
-      return res.end(`{"error": "Path unknown"}`)
-    }
-    let nLinesStartIndex = metadata[filePath].lines.length - numLines - 1,
-        nLinesStartBytes = metadata[filePath].lines[nLinesStartIndex]
-    try {
-      res.setHeader('Content-Type', 'text/plain')
-      res.setHeader('X-Log-File', filePath)
-      res.setHeader('X-Requested-Lines', numLines)
+  }
+  let r = new URL(req.url, `http://${req.headers.host}`)
+  let filePath = prefix + r.pathname,
+      numLines = Number(r.searchParams.get('lines')) || 1,
+      pattern = r.searchParams.get('pattern')
+  if (filePath && filePath.length > inputLength
+      || pattern && pattern.length > inputLength) {
+    res.statusCode = 400
+    return res.end(`{"error": "Path and pattern are each limited to ${inputLength} characters"}`)
+  }
 
-      const out = await reverseSeq(
-        createReadStream(filePath, { start: nLinesStartBytes })
-          .pipe(lineT())
-          .pipe(filterT(pattern))
-          .pipe(responseT()))
-      if (out) res.end(out)
-      else throw `reverseSeq failed: lines=${numLines} path=${filePath}`
-    } catch (e) {
-      console.log(e)
-      res.setHeader('Content-Type', 'application/json')
-      res.statusCode = 500
-      return res.end(`{"error": "Unexpected error"}`)
+  try {
+    res.setHeader('Content-Type', 'text/plain')
+    res.setHeader('X-Log-File', filePath)
+    res.setHeader('X-Requested-Lines', numLines)
+
+    let source, cacheIndex, cachedOffset
+    const cached = metadata[filePath] && metadata[filePath].lines
+    if (!cached) {
+      source = await getSufficientStream(filePath, numLines)
+    } else if (cached.length > numLines) {
+      cacheIndex = cached.length - numLines - 1
+      source = await getReader(filePath, cached[cacheIndex])
+    } else {
+      let aux = await getSufficientStream(
+        filePath, numLines - (cached.length-1), cached[0]-1),
+          prm = await getReader(filePath, cached[0])
+      source = auxiliaryStream(aux, prm)
     }
+    if (!source) {
+      res.setHeader('Content-Type', 'application/json')
+      res.statusCode = 404
+      return res.end(`{"error": "File not found: ${filePath}"}`)
+    }
+    const out = await reverseSeq(source.pipe(lineT())
+                                 .pipe(filterT(pattern))
+                                 .pipe(responseT()))
+    if (out) res.end(out)
+    else throw `reverseSeq failed: lines=${numLines} path=${filePath}`
+  } catch (e) {
+    console.log(e)
+    res.setHeader('Content-Type', 'application/json')
+    res.statusCode = 500
+    return res.end(`{"error": "Unexpected error"}`)
   }
 })
 

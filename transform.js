@@ -1,5 +1,5 @@
-import { Transform } from 'stream'
-export { lineT, filterT, responseT, reverseSeq }
+import { PassThrough, Transform } from 'stream'
+export { lineT, filterT, responseT, auxiliaryStream, reverseSeq }
 
 
 function lineT() {
@@ -36,6 +36,21 @@ function responseT() {
       callback()
     }
   })
+}
+
+function auxiliaryStream(primary, auxiliary) {
+  const stream = new PassThrough()
+  primary.on('end', function() {
+    auxiliary.pipe(stream)
+  })
+  auxiliary.on('end', function() {
+    stream.end()
+  })
+  return {
+    pipe: function(s) {
+      return primary.pipe(stream.pipe(s), { end: false })
+    }
+  }
 }
 
 async function reverseSeq(readable) {
