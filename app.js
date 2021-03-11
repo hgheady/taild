@@ -11,10 +11,9 @@ const metadata = cacheLength ? await initMetadata(prefix) : {}
 const server = http.createServer()
 
 server.on('request', async (req, res) => {
-  res.setHeader('Content-Type', 'application/json')
+  const respond = response(res)
   if (req.method !== 'GET') {
-    res.statusCode = 405
-    return res.end(`{"error": "${http.STATUS_CODES[405]} - ${req.method}"}`)
+    return respond(405, {error: `${http.STATUS_CODES[405]} - ${req.method}`})
   }
   let r = new URL(req.url, `http://${req.headers.host}`)
   let filePath = prefix + r.pathname,
@@ -22,15 +21,9 @@ server.on('request', async (req, res) => {
       pattern = r.searchParams.get('pattern')
   if (filePath && filePath.length > inputLength
       || pattern && pattern.length > inputLength) {
-    res.statusCode = 400
-    return res.end(`{"error": "Path and pattern are each limited to ${inputLength} characters"}`)
+    return respond(400, {error: `Path and pattern are each limited to ${inputLength} characters`})
   }
-
   try {
-    res.setHeader('Content-Type', 'text/plain')
-    res.setHeader('X-Log-File', filePath)
-    res.setHeader('X-Requested-Lines', numLines)
-
     let source, cacheIndex
     const cached = metadata[filePath] && metadata[filePath].lines
     if (!cached) {
@@ -44,23 +37,33 @@ server.on('request', async (req, res) => {
       source = streamSeq(rest, tail)
     }
     if (!source) {
-      res.setHeader('Content-Type', 'application/json')
-      res.statusCode = 404
-      return res.end(`{"error": "File not found: ${filePath}"}`)
+      return respond(404, {error: `File not found: ${filePath}`})
     }
     const out = await reverseSeq(source.pipe(lineT())
                                  .pipe(filterT(pattern))
                                  .pipe(responseT()))
-    if (out) res.end(out)
-    else throw `reverseSeq failed: lines=${numLines} path=${filePath}`
+    if (out) return respond(200, out, [['Content-Type', 'text/plain'],
+                                       ['X-Log-File', filePath],
+                                       ['X-Requested-Lines', numLines]])
+    else throw `Response failed: lines=${numLines} path=${filePath}`
   } catch (e) {
     console.log(e)
-    res.setHeader('Content-Type', 'application/json')
-    res.statusCode = 500
-    return res.end(`{"error": "Unexpected error"}`)
+    return respond(500, {error: "Unexpected error"})
   }
 })
 
 server.listen(port, () => {
   console.log(`TailD serving "${prefix}" on port ${port}`)
 })
+
+function response(res) {
+  return (s,b,h=null) => respond(res, s, b, h)
+}
+
+function respond(res, status, body, headers) {
+  res.statusCode = status
+  if (headers) headers.forEach(([k,v]) => res.setHeader(k,v))
+  else res.setHeader('Content-Type', 'application/json')
+  if (body instanceof Buffer) res.end(body)
+  else res.end(JSON.stringify(body))
+}

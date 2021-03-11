@@ -21,15 +21,11 @@ async function getReader(fileName, start, end, stat=null) {
 }
 
 async function getSufficientStream(fileName, minLines, end) {
-  let stats, blkSize
-  try {
-    stats = await stat(fileName)
-    blkSize = stats.blksize
-    end = end || stats.size
-  } catch (e) {
-    console.log(e)
-    return null
-  }
+  let stats = await getStat(fileName)
+  if (!stats) return null
+  let blkSize = stats.blksize
+  end = end || stats.size
+
   let rs, bsRead = 0, nsRead = 0, newlines = 0, offset = 0
   for (const bound of blkBoundaryIter(blkSize, end)) {
     rs = await getReader(fileName, bound, end-offset, stats)
