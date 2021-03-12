@@ -1,5 +1,5 @@
-import { Transform } from 'stream'
-export { lineT, filterT, responseT }
+import { PassThrough, Transform } from 'stream'
+export { lineT, filterT, responseT, streamSeq, reverseSeq }
 
 
 function lineT() {
@@ -35,5 +35,36 @@ function responseT() {
       this.push(Buffer.from('\n'))
       callback()
     }
+  })
+}
+
+function streamSeq(fst, snd) {
+  const stream = new PassThrough()
+  fst.on('end', function() {
+    snd.pipe(stream)
+  })
+  snd.on('end', function() {
+    stream.end()
+  })
+  return {
+    pipe: function(s) {
+      return fst.pipe(stream.pipe(s), { end: false })
+    }
+  }
+}
+
+async function reverseSeq(readable) {
+  return new Promise((resolve, reject) => {
+    const bufs = []
+    readable.on('data', (bs) => {
+      bufs.unshift(bs)
+    })
+    readable.on('end', function() {
+      resolve(Buffer.concat(bufs))
+    })
+    readable.on('error', (e) => {
+      console.log(e)
+      resolve(null)
+    })
   })
 }

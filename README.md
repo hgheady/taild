@@ -8,10 +8,12 @@ node app.js
 ```
 This project uses only built-in node libraries.
 
-### Configure
-`PORT` environment variable sets the listen port (default `3142`)
+### Configuration - Environment Variables
+`PORT` sets the listen port (default `3142`)
 
-`DIR` environment variable sets the log file directory path (relative or absolute, default `./logs`)
+`DIR` sets the log file directory path (relative or absolute, default `./logs`)
+
+`CACHE_SIZE` sets the number of line indexes to cache per file (~10 bytes per line per file, default 1000)
 
 ### Use
 ```

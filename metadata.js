@@ -1,4 +1,5 @@
 import { createReadStream } from 'fs'
+import { cacheLength } from './config.js'
 import { readdir, stat, watch } from 'fs/promises'
 export { initMetadata }
 
@@ -14,10 +15,7 @@ async function initMetadata(directory) {
       size = st.size
       rs = createReadStream(path)
       nis = await newlineIndices(rs)
-      map[path] = {
-        size: size,
-        lines: nis
-      }
+      if (nis) map[path] = { size: size, lines: limitCache(nis) }
     }
     installWatcher(directory, map)
     return map
@@ -55,7 +53,11 @@ async function updateFileMetadata(map, path, stats) {
         lines = md ? md.lines : [],
         rs = createReadStream(path, { start: start }),
         is = await newlineIndices(rs, start)
-  map[path] = { size: stats.size, lines: lines.concat(is) }
+  if (is) {
+    map[path] = { size: stats.size, lines: limitCache(lines.concat(is)) }
+  } else {
+    map[path] = undefined
+  }
   return map
 }
 
@@ -71,5 +73,12 @@ async function newlineIndices(readable, offset = 0) {
     readable.on('end', function() {
       resolve(nlis)
     })
+    readable.on('error', () => {
+      resolve(null)
+    })
   })
+}
+
+function limitCache(ns) {
+  return ns.slice(-cacheLength)
 }
